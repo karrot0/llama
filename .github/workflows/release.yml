@@ -2,10 +2,8 @@ name: Llama
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '17 3 * * *'
   push:
-    branches: ['main']
+    branches: ['ios-release']
 
 permissions:
   contents: read
@@ -25,19 +23,10 @@ jobs:
     steps:
       - name: Resolve latest llama.cpp release
         id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          tag=$(gh api repos/ggml-org/llama.cpp/releases --jq '.[0].tag_name')
-          existing_tags=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[].tag_name')
-          release_tag=$tag
-          suffix=1
-          while grep -Fxq "$release_tag" <<< "$existing_tags"; do
-            release_tag="$tag.$suffix"
-            ((suffix += 1))
-          done
-          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
-          printf 'release_tag=%s\n' "$release_tag" >> "$GITHUB_OUTPUT"
+          # This fork publishes only the iOS packages for Koharu's pinned release.
+          printf 'tag=%s\n' 'b11642' >> "$GITHUB_OUTPUT"
+          printf 'release_tag=%s\n' 'b11642' >> "$GITHUB_OUTPUT"
 
   build:
     needs: source
@@ -46,30 +35,6 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - backend: cuda
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - backend: cuda
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - backend: cuda
-            os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-          - backend: hip
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - backend: hip
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - backend: vulkan
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - backend: vulkan
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - backend: metal
-            os: macos-latest
-            target: aarch64-apple-darwin
           - backend: metal
             os: macos-latest
             target: aarch64-apple-ios
