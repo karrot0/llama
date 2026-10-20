@@ -5,7 +5,7 @@ on:
   schedule:
     - cron: '17 3 * * *'
   push:
-    branches: ['main']
+    branches: ['ios-test']
 
 permissions:
   contents: read
@@ -46,30 +46,6 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - backend: cuda
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - backend: cuda
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - backend: cuda
-            os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-          - backend: hip
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - backend: hip
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - backend: vulkan
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - backend: vulkan
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - backend: metal
-            os: macos-latest
-            target: aarch64-apple-darwin
           - backend: metal
             os: macos-latest
             target: aarch64-apple-ios
@@ -331,6 +307,7 @@ jobs:
           retention-days: 3
 
   release:
+    if: false
     needs: [source, build]
     runs-on: ubuntu-latest
     permissions:
