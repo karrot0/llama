@@ -70,6 +70,9 @@ jobs:
           - backend: metal
             os: macos-latest
             target: aarch64-apple-darwin
+          - backend: metal
+            os: macos-latest
+            target: aarch64-apple-ios
 
     runs-on: ${{ matrix.os }}
     env:
@@ -80,6 +83,7 @@ jobs:
       SCCACHE_IDLE_TIMEOUT: '0'
       SCCACHE_IGNORE_SERVER_IO_ERROR: '1'
       TARGET_TRIPLE: ${{ matrix.target }}
+      IOS_DEPLOYMENT_TARGET: '18.0'
 
     steps:
       - uses: actions/checkout@v7
@@ -243,6 +247,12 @@ jobs:
               ;;
             metal)
               backend_args+=("-DCMAKE_OSX_ARCHITECTURES=arm64")
+              if [[ "$TARGET_TRIPLE" == *-apple-ios ]]; then
+                backend_args+=(
+                  "-DCMAKE_SYSTEM_NAME=iOS"
+                  "-DCMAKE_OSX_DEPLOYMENT_TARGET=$IOS_DEPLOYMENT_TARGET"
+                )
+              fi
               ;;
           esac
 
@@ -262,11 +272,47 @@ jobs:
         run: cmake --build build --target llama mtmd --config Release
 
       - name: Package llama and MTMD
+        if: matrix.target != 'aarch64-apple-ios'
         shell: bash
         run: |
           mkdir package
           cp build/bin/*llama.* package/
           cp build/bin/*mtmd.* package/
+          tar -C package -czf "$TARGET_TRIPLE-$BACKEND.tar.gz" .
+
+      # iOS loads code only from frameworks signed into the app bundle, so Koharu embeds
+      # these XCFrameworks and opens Frameworks/<name>.framework/<name>.
+      - name: Package llama and MTMD frameworks
+        if: matrix.target == 'aarch64-apple-ios'
+        shell: bash
+        run: |
+          mkdir package
+          for name in llama mtmd; do
+            framework="frameworks/$name.framework"
+            mkdir -p "$framework"
+            cp "build/bin/lib$name.dylib" "$framework/$name"
+            install_name_tool -id "@rpath/$name.framework/$name" "$framework/$name"
+            install_name_tool -change @rpath/libllama.dylib @rpath/llama.framework/llama "$framework/$name"
+            cat > "$framework/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key><string>$name</string>
+            <key>CFBundleIdentifier</key><string>rs.koharu.$name</string>
+            <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+            <key>CFBundleName</key><string>$name</string>
+            <key>CFBundlePackageType</key><string>FMWK</string>
+            <key>CFBundleShortVersionString</key><string>1.0</string>
+            <key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>
+            <key>CFBundleVersion</key><string>1</string>
+            <key>MinimumOSVersion</key><string>$IOS_DEPLOYMENT_TARGET</string>
+          </dict>
+          </plist>
+          PLIST
+            otool -L "$framework/$name"
+            xcodebuild -create-xcframework -framework "$framework" -output "package/$name.xcframework"
+          done
           tar -C package -czf "$TARGET_TRIPLE-$BACKEND.tar.gz" .
 
       - name: Stop sccache
